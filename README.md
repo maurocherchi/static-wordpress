@@ -14,6 +14,7 @@ First you need to buy your domain, once you have your domain you can deploy this
 Note: if you buy it using Route 53, you can either:
 * Keep the default hosted zone and change the distribution stack to use it (HostedZone.fromHostedZoneAttributes(...))
 * Delete the default hosted zone, let the stack create a new one, change the Name Servers associated with your domain name
+
 If you buy the domain outside of AWS, once the stack is deployed you have to change the Name Servers associated with
 your domain, with the ones that AWS will assign to the hosted zone created by the stack.
 
