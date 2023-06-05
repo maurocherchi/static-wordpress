@@ -1,21 +1,29 @@
 #!/usr/bin/env node
-import 'source-map-support/register';
-import * as cdk from 'aws-cdk-lib';
-import { StaticWordpressStack } from '../lib/static-wordpress-stack';
+import "source-map-support/register";
+import * as cdk from "aws-cdk-lib";
+import { WebsiteStack } from "../lib/website-stack";
+import { DistributionStack } from "../lib/distribution-stack";
+
+// TODO define all those variables
+const accountId = "";
+const adminUserArn = "";
+const domainName = "";
+const ec2InstanceName = "";
+const ec2KeyName = "";
+// ------------------------------
 
 const app = new cdk.App();
-new StaticWordpressStack(app, 'StaticWordpressStack', {
-  /* If you don't specify 'env', this stack will be environment-agnostic.
-   * Account/Region-dependent features and context lookups will not work,
-   * but a single synthesized template can be deployed anywhere. */
 
-  /* Uncomment the next line to specialize this stack for the AWS Account
-   * and Region that are implied by the current CLI configuration. */
-  // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
+const websiteStack = new WebsiteStack(app, "WebsiteStack", {
+  env: { account: accountId, region: "us-east-1" },
+  adminUserArn: adminUserArn,
+  domainName: domainName,
+  ec2InstanceName: ec2InstanceName,
+  ec2KeyName: ec2KeyName,
+});
 
-  /* Uncomment the next line if you know exactly what Account and Region you
-   * want to deploy the stack to. */
-  // env: { account: '123456789012', region: 'us-east-1' },
-
-  /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
+new DistributionStack(app, "WebsiteDistribution", {
+  env: { account: accountId, region: "us-east-1" },
+  bucket: websiteStack.bucket,
+  domainName: domainName,
 });
