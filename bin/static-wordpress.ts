@@ -4,7 +4,7 @@ import * as cdk from "aws-cdk-lib";
 import { WebsiteStack } from "../lib/website-stack";
 import { DistributionStack } from "../lib/distribution-stack";
 
-// TODO define all those variables
+// TODO define all these variables
 const accountId = "";
 const adminUserArn = "";
 const domainName = "";
