@@ -2,28 +2,21 @@
 import "source-map-support/register";
 import * as cdk from "aws-cdk-lib";
 import { WebsiteStack } from "../lib/website-stack";
-import { DistributionStack } from "../lib/distribution-stack";
 
 // TODO define all these variables
-const accountId = "";
-const adminUserArn = "";
-const domainName = "";
-const ec2InstanceName = "";
-const ec2KeyName = "";
+const accountId = "432621157915";
+const adminUserArn = "arn:aws:iam::432621157915:user/admin";
+const domainName = "example.com";
+const hostedZoneId = "zoneid"
+const ec2InstanceName = "wordpress-example";
 // ------------------------------
 
 const app = new cdk.App();
 
-const websiteStack = new WebsiteStack(app, "WebsiteStack", {
+new WebsiteStack(app, "WebsiteStack", {
   env: { account: accountId, region: "us-east-1" },
   adminUserArn: adminUserArn,
   domainName: domainName,
+  zoneId: hostedZoneId,
   ec2InstanceName: ec2InstanceName,
-  ec2KeyName: ec2KeyName,
-});
-
-new DistributionStack(app, "WebsiteDistribution", {
-  env: { account: accountId, region: "us-east-1" },
-  bucket: websiteStack.bucket,
-  domainName: domainName,
 });
