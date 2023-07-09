@@ -1,128 +1,62 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
-import * as kms from "aws-cdk-lib/aws-kms";
+import * as route53 from "aws-cdk-lib/aws-route53";
+import * as acm from "aws-cdk-lib/aws-certificatemanager";
+import * as cf from "aws-cdk-lib/aws-cloudfront";
+import { CloudFrontTarget } from "aws-cdk-lib/aws-route53-targets";
+import { S3Origin } from "aws-cdk-lib/aws-cloudfront-origins";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
-import { KeyPair } from "cdk-ec2-key-pair";
-import { RemovalPolicy } from "aws-cdk-lib";
 import { aws_dlm as dlm } from "aws-cdk-lib";
 
 interface WebsiteProps extends cdk.StackProps {
-  adminUserArn: string;
   domainName: string;
+  zoneId: string;
+  adminUserArn: string;
   ec2InstanceName: string;
-  ec2KeyName: string;
 }
 
 export class WebsiteStack extends cdk.Stack {
-  public readonly bucket: s3.IBucket;
-
   constructor(scope: Construct, id: string, props: WebsiteProps) {
     super(scope, id, props);
 
-    // New KMS encryption key for the bucket
-    const bucketEncryptionKey = new kms.Key(this, "BucketEncryptionKey", {
-      alias: "BucketEncryptionKey",
-      enableKeyRotation: true,
-      removalPolicy: RemovalPolicy.DESTROY,
-      policy: iam.PolicyDocument.fromJson({
-        Id: "website-key-policy",
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Sid: "Enable IAM User Permissions",
-            Effect: "Allow",
-            Principal: {
-              AWS: "arn:aws:iam::" + this.account + ":root",
-            },
-            Action: "kms:*",
-            Resource: "*",
-          },
-          {
-            Sid: "Allow access for Key Administrators",
-            Effect: "Allow",
-            Principal: {
-              AWS: props.adminUserArn,
-            },
-            Action: [
-              "kms:Create*",
-              "kms:Describe*",
-              "kms:Enable*",
-              "kms:List*",
-              "kms:Put*",
-              "kms:Update*",
-              "kms:Revoke*",
-              "kms:Disable*",
-              "kms:Get*",
-              "kms:Delete*",
-              "kms:TagResource",
-              "kms:UntagResource",
-              "kms:ScheduleKeyDeletion",
-              "kms:CancelKeyDeletion",
-            ],
-            Resource: "*",
-          },
-          {
-            Sid: "Allow use of the key",
-            Effect: "Allow",
-            Principal: {
-              AWS: props.adminUserArn,
-            },
-            Action: [
-              "kms:Encrypt",
-              "kms:Decrypt",
-              "kms:ReEncrypt*",
-              "kms:GenerateDataKey*",
-              "kms:DescribeKey",
-            ],
-            Resource: "*",
-          },
-          {
-            Sid: "Allow attachment of persistent resources",
-            Effect: "Allow",
-            Principal: {
-              AWS: props.adminUserArn,
-            },
-            Action: ["kms:CreateGrant", "kms:ListGrants", "kms:RevokeGrant"],
-            Resource: "*",
-            Condition: {
-              Bool: {
-                "kms:GrantIsForAWSResource": "true",
-              },
-            },
-          },
-          {
-            Sid: "AllowCloudFrontServicePrincipalSSE-KMS",
-            Effect: "Allow",
-            Principal: {
-              AWS: "arn:aws:iam::" + this.account + ":root",
-              Service: "cloudfront.amazonaws.com",
-            },
-            Action: ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey*"],
-            Resource: "*",
-            Condition: {
-              StringLike: {
-                "AWS:SourceArn":
-                  "arn:aws:cloudfront::" + this.account + ":distribution/*",
-              },
-            },
-          },
-        ],
+    // The hosted zone created automatically when you bought the domain
+    let hostedZone = route53.HostedZone.fromHostedZoneAttributes(
+      this,
+      "HostedZone",
+      {
+        hostedZoneId: props.zoneId,
+        zoneName: props.domainName,
+      }
+    );
+
+    // TODO update with your domain details
+    const certificate = new acm.Certificate(this, "DomainCert", {
+      domainName: props.domainName,
+      certificateName: props.domainName,
+      subjectAlternativeNames: [`www.${props.domainName}`],
+      validation: acm.CertificateValidation.fromDnsMultiZone({
+        "www.[YOUR_DOMAIN_HERE same as props.domainName]": hostedZone,
+        "[YOUR_DOMAIN_HERE same as props.domainName]": hostedZone,
+      }),
+    });
+
+    const cfFunction = new cf.Function(this, "Function", {
+      code: cf.FunctionCode.fromFile({
+        filePath: "src/rewrite_url.js",
       }),
     });
 
     // S3 bucket
-    this.bucket = new s3.Bucket(this, "Bucket", {
+    const bucket = new s3.Bucket(this, "Bucket", {
       bucketName: props.domainName,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryptionKey: bucketEncryptionKey,
       enforceSSL: true,
       versioned: false,
-      removalPolicy: RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
-    this.bucket.addToResourcePolicy(
+    bucket.addToResourcePolicy(
       iam.PolicyStatement.fromJson({
         Sid: "AllowCloudFrontServicePrincipalReadOnly",
         Effect: "Allow",
@@ -130,15 +64,36 @@ export class WebsiteStack extends cdk.Stack {
           Service: "cloudfront.amazonaws.com",
         },
         Action: ["s3:GetObject"],
-        Resource: this.bucket.bucketArn + "/*",
+        Resource: `${bucket.bucketArn}/*`,
         Condition: {
           StringLike: {
-            "AWS:SourceArn":
-              "arn:aws:cloudfront::" + this.account + ":distribution/*",
+            "AWS:SourceArn": `arn:aws:cloudfront::${this.account}:distribution/*`,
           },
         },
       })
     );
+
+    const distribution = new cf.Distribution(this, "Distribution", {
+      certificate: certificate,
+      domainNames: [`www.${props.domainName}`, props.domainName],
+      defaultBehavior: {
+        origin: new S3Origin(bucket),
+        functionAssociations: [
+          {
+            function: cfFunction,
+            eventType: cf.FunctionEventType.VIEWER_REQUEST,
+          },
+        ],
+        viewerProtocolPolicy: cf.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      },
+    });
+
+    new route53.ARecord(this, "Alias", {
+      zone: hostedZone,
+      target: route53.RecordTarget.fromAlias(
+        new CloudFrontTarget(distribution)
+      ),
+    });
 
     // EC2 running wordpress
     const defaultVpc = ec2.Vpc.fromLookup(this, "DefaultVpc", {
@@ -165,36 +120,33 @@ export class WebsiteStack extends cdk.Stack {
       "Allow HTTPS from everywhere"
     );
 
-    const wpServerKeyPair = new KeyPair(this, "WpServerKeyPair", {
-      name: props.ec2KeyName,
-      storePublicKey: true,
-      description: "Wordpress server access key",
-    });
-
     const wpBitnamiImage = ec2.MachineImage.genericLinux({
       "us-east-1": "ami-09fedd064403fb45b",
+    });
+
+    const cfnKeyPair = new ec2.CfnKeyPair(this, "MyCfnKeyPair", {
+      keyName: "newWpServerKeyPair",
+      publicKeyMaterial:
+        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCSr6LjGOxr/dghLx1MuqBEGT17pUrJSmM5QfcojDq4mjrItJ3t+DcQYSIxs3nh+mtG9UUhJ4Gqb8x7PVoHa8ez4BOTa4nh716QzqwjAnnG5Jqj/prMzEloOnB/LGL0zfXPNI7Y0MMvAuY+DSUIPz2O4EbGJGebP1nRhscDA8Ho5xXpc9/TJHfJlAXqpnMaC+dcvFP3arG1cRPuD6GMQ5HnafLGeN/Xc5b5tewde6Kw2YIjWo74iM0x4c4SHMNq/C0iTRCzNquJVxVltjdqCHqbyxrCIDwIxaRPDhoSTSOwoGHEEiXvLPjYKCDOd38fwCYZk9TLYA4q/IY6WwpT7tJp",
     });
 
     const wpServer = new ec2.Instance(this, "WpServer", {
       instanceName: props.ec2InstanceName,
       vpc: defaultVpc,
       instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T2,
-        ec2.InstanceSize.SMALL
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
       ),
       machineImage: wpBitnamiImage,
       allowAllOutbound: true,
       securityGroup: wpAdminSecurityGroup,
-      keyName: wpServerKeyPair.keyPairName,
+      keyName: cfnKeyPair.keyName,
+      propagateTagsToVolumeOnCreation: true,
     });
     wpServer.addUserData(
       "aws configure set default.region " + this.region,
       "sudo wp plugin install simply-static --activate"
     );
-
-    new ec2.CfnEIP(this, "ElasticIp", {
-      instanceId: wpServer.instanceId,
-    });
 
     // Allow wp server role to put objects in the bucket
     wpServer.role.addToPrincipalPolicy(
@@ -202,11 +154,11 @@ export class WebsiteStack extends cdk.Stack {
         Sid: "AllowWpServerRoleToPutObjectsInTheBucket",
         Action: ["s3:PutObject", "s3:PutObjectAcl"],
         Effect: "Allow",
-        Resource: this.bucket.bucketArn,
+        Resource: bucket.bucketArn,
       })
     );
     // Allow the bucket to be used by wp server role
-    this.bucket.addToResourcePolicy(
+    bucket.addToResourcePolicy(
       iam.PolicyStatement.fromJson({
         Sid: "AllowTheBucketToBeUsedByWpServerRole",
         Effect: "Allow",
@@ -214,66 +166,32 @@ export class WebsiteStack extends cdk.Stack {
           AWS: wpServer.role.roleArn,
         },
         Action: ["s3:PutObject", "s3:PutObjectAcl"],
-        Resource: this.bucket.bucketArn + "/*",
-      })
-    );
-    // Allow wp server role to use the encryption key
-    wpServer.role.addToPrincipalPolicy(
-      iam.PolicyStatement.fromJson({
-        Sid: "AllowWpServerRoleToUseTheEncryptionKey",
-        Action: ["kms:GenerateDataKey"],
-        Effect: "Allow",
-        Resource: bucketEncryptionKey.keyArn,
-      })
-    );
-    // Allow the bucket encryption key to be used by wp server role
-    bucketEncryptionKey.addToResourcePolicy(
-      iam.PolicyStatement.fromJson({
-        Sid: "AllowTheEncryptionKeyToBeUsedByWpServerRole",
-        Effect: "Allow",
-        Principal: {
-          AWS: wpServer.role.roleArn,
-        },
-        Action: [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey",
-        ],
-        Resource: "*",
+        Resource: `${bucket.bucketArn}/*`,
       })
     );
 
-    new dlm.CfnLifecyclePolicy(
-      this,
-      "LifecyclePolicy",
-      {
-        description: "Wordpress instance volumes backup",
-        state: "ENABLED",
-        executionRoleArn:
-          "arn:aws:iam::" +
-          this.account +
-          ":role/service-role/AWSDataLifecycleManagerDefaultRole",
-        policyDetails: {
-          resourceTypes: ["INSTANCE"],
-          targetTags: [{ key: "Name", value: props.ec2InstanceName }],
-          schedules: [
-            {
-              name: "Wordpress instance daily backup",
-              createRule: {
-                interval: 24,
-                intervalUnit: "HOURS",
-                times: ["02:00"],
-              },
-              retainRule: {
-                count: 1,
-              },
-              copyTags: true,
+    new dlm.CfnLifecyclePolicy(this, "LifecyclePolicy", {
+      description: "Wordpress instance volumes backup",
+      state: "ENABLED",
+      executionRoleArn: `arn:aws:iam::${this.account}:role/service-role/AWSDataLifecycleManagerDefaultRole`,
+      policyDetails: {
+        resourceTypes: ["INSTANCE"],
+        targetTags: [{ key: "Name", value: props.ec2InstanceName }],
+        schedules: [
+          {
+            name: "Wordpress instance daily backup",
+            createRule: {
+              interval: 24,
+              intervalUnit: "HOURS",
+              times: ["02:00"],
             },
-          ],
-        },
-      }
-    );
+            retainRule: {
+              count: 1,
+            },
+            copyTags: true,
+          },
+        ],
+      },
+    });
   }
 }
