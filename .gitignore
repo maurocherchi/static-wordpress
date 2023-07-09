@@ -1,9 +1,11 @@
+node_modules
 !jest.config.js
 test/static-wordpress.test.js
 bin/*.js
 lib/*.js
 *.d.ts
-node_modules
+*.pub
+*.pem
 
 # CDK asset staging directory
 .cdk.staging
