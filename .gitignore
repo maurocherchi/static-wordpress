@@ -1,5 +1,7 @@
-*.js
 !jest.config.js
+test/static-wordpress.test.js
+bin/*.js
+lib/*.js
 *.d.ts
 node_modules
 
