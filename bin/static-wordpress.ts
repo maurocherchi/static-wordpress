@@ -9,6 +9,7 @@ const adminUserArn = "arn:aws:iam::432621157915:user/admin";
 const domainName = "example.com";
 const hostedZoneId = "zoneid"
 const ec2InstanceName = "wordpress-example";
+const ec2KeyPublicMaterial = "ssh-rsa AAAAB3NzaC1yc...";
 // ------------------------------
 
 const app = new cdk.App();
@@ -19,4 +20,5 @@ new WebsiteStack(app, "WebsiteStack", {
   domainName: domainName,
   zoneId: hostedZoneId,
   ec2InstanceName: ec2InstanceName,
+  ec2KeyPublicMaterial: ec2KeyPublicMaterial,
 });

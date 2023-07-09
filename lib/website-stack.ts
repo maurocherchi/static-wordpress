@@ -15,6 +15,7 @@ interface WebsiteProps extends cdk.StackProps {
   zoneId: string;
   adminUserArn: string;
   ec2InstanceName: string;
+  ec2KeyPublicMaterial: string;
 }
 
 export class WebsiteStack extends cdk.Stack {
@@ -126,8 +127,7 @@ export class WebsiteStack extends cdk.Stack {
 
     const cfnKeyPair = new ec2.CfnKeyPair(this, "MyCfnKeyPair", {
       keyName: "newWpServerKeyPair",
-      publicKeyMaterial:
-        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCSr6LjGOxr/dghLx1MuqBEGT17pUrJSmM5QfcojDq4mjrItJ3t+DcQYSIxs3nh+mtG9UUhJ4Gqb8x7PVoHa8ez4BOTa4nh716QzqwjAnnG5Jqj/prMzEloOnB/LGL0zfXPNI7Y0MMvAuY+DSUIPz2O4EbGJGebP1nRhscDA8Ho5xXpc9/TJHfJlAXqpnMaC+dcvFP3arG1cRPuD6GMQ5HnafLGeN/Xc5b5tewde6Kw2YIjWo74iM0x4c4SHMNq/C0iTRCzNquJVxVltjdqCHqbyxrCIDwIxaRPDhoSTSOwoGHEEiXvLPjYKCDOd38fwCYZk9TLYA4q/IY6WwpT7tJp",
+      publicKeyMaterial: props.ec2KeyPublicMaterial,
     });
 
     const wpServer = new ec2.Instance(this, "WpServer", {
