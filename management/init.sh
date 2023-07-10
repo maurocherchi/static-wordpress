@@ -2,10 +2,11 @@
 
 # the certificate must be issued in the us-east-1 region
 export AWS_DEFAULT_REGION=us-east-1
-# you defined them in bin/static-wordpress.ts (butcket name is the same as the domain name)
+# get it from the generate_keys script (default name is "private_key")
+export KEY_NAME=private_key
+# you defined these next two in bin/static-wordpress.ts (butcket name should be the same as the domain name)
 export WP_SERVER_NAME=
 export BUCKET_NAME=
-export KEY_NAME=
 
 WP_SERVER_INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$WP_SERVER_NAME" \
     --query "Reservations[].Instances[].InstanceId" --output text)
@@ -22,9 +23,7 @@ if [ $status -ne 0 ]; then
     return
 fi
 
-aws secretsmanager describe-secret --secret-id ec2-ssh-key/$KEY_NAME/private > /dev/null
-status=$?
-if [ $status -ne 0 ]; then
+if [ ! -e "$KEY_NAME.pem" ]; then
     echo "Error: Key with name $KEY_NAME not found."
     return
 fi

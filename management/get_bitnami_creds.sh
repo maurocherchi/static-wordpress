@@ -8,11 +8,6 @@ fi
 SERVER_IP=$(aws ec2 describe-instances --instance-ids $WP_SERVER_INSTANCE_ID \
   --query 'Reservations[].Instances[].PublicIpAddress' --output text)
 
-echo "Getting key"
-aws secretsmanager get-secret-value --secret-id ec2-ssh-key/$KEY_NAME/private \
-  --query SecretString --output text >$KEY_NAME.pem && chmod 400 $KEY_NAME.pem
-echo "Key $KEY_NAME.pem saved in $PWD"
-
 status=$(aws ec2 describe-instances --instance-ids $WP_SERVER_INSTANCE_ID \
   --query 'Reservations[].Instances[].State.Name' --output text)
 if [ "$status" == "running" ]; then
