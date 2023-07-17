@@ -1,6 +1,6 @@
 # Static WordPress website CDK stack
 
-* Demo video: https://youtu.be/H5I3Eq3uNzw
+* Demo video: https://www.youtube.com/watch?v=zI7a1mXvFJ8
 * Article: https://maurocherchi.com/host-a-static-wordpress-site/
 
 ## Setup
@@ -9,9 +9,9 @@ Prerequisites:
 * AWS account
 * AWS CDK installed in your dev environment
 
-First you need to buy your domain, once you have your domain you can deploy this stack.
+First, you need to buy your domain, once you have your domain you can deploy this stack.
 
-Note: if you buy it using Route 53, you can either:
+Note: If you buy it using Route 53, you can either:
 * Keep the default hosted zone and change the distribution stack to use it (HostedZone.fromHostedZoneAttributes(...))
 * Delete the default hosted zone, let the stack create a new one, change the Name Servers associated with your domain name
 
